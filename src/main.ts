@@ -25,7 +25,7 @@ const DEFAULTS = {
   rise: 2.4,
   smoke: 0.55,
   embers: true,
-  bloom: 0.75,
+  bloom: 0.6,
   autoRotate: true,
 };
 const params = { ...DEFAULTS };
@@ -52,7 +52,7 @@ let dpr = Math.min(window.devicePixelRatio || 1, 1.75);
 renderer.setPixelRatio(dpr);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 0.95;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
@@ -61,10 +61,10 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   60
 );
-camera.position.set(0.25, 1.2, 3.7);
+camera.position.set(0.3, 1.25, 4.2);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0.8, 0);
+controls.target.set(0, 0.85, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.enablePan = false;
@@ -97,7 +97,7 @@ const uniforms = {
   uTurbulence: { value: params.turbulence },
   uWobble: { value: params.wobble },
   uSmoke: { value: params.smoke },
-  uGlow: { value: 0.55 },
+  uGlow: { value: 0.28 },
   uBaseY: { value: 0 },
 };
 
@@ -126,7 +126,7 @@ const emberGeometry = new THREE.BufferGeometry();
   const sizes = new Float32Array(EMBER_COUNT);
   for (let i = 0; i < EMBER_COUNT; i++) {
     seeds[i] = Math.random();
-    sizes[i] = 1.0 + Math.random() * 2.6;
+    sizes[i] = 0.6 + Math.random() * 1.2;
   }
   emberGeometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   emberGeometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
@@ -168,8 +168,8 @@ composer.addPass(new RenderPass(scene, camera));
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
   params.bloom,
-  0.55,
-  0.8
+  0.45,
+  1.0
 );
 composer.addPass(bloomPass);
 composer.addPass(new OutputPass());

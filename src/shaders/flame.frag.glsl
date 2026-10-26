@@ -104,11 +104,11 @@ float fireField(vec3 p, out vec3 emit) {
 
   float heat = fuel * mix(1.0, turb, erosion);
   heat -= 0.30 * smoothstep(0.35, 1.05, y); // cool toward the tip
-  heat = (heat - 0.22) * 1.9;
+  heat = (heat - 0.30) * 1.6;
   heat = max(heat, 0.0);
 
-  float dens = smoothstep(0.0, 0.55, heat);
-  float t01 = clamp(heat * 0.85, 0.0, 1.0);
+  float dens = smoothstep(0.0, 0.5, heat);
+  float t01 = clamp(heat * 0.55, 0.0, 1.0);
 
   // Temperature -> color: edge color -> core color -> white hot
   vec3 c = mix(uColorEdge, uColorCore, smoothstep(0.10, 0.85, t01));
@@ -119,7 +119,7 @@ float fireField(vec3 p, out vec3 emit) {
       + 0.05 * sin(t * 21.7 + p.y * 4.0)
       + 0.04 * sin(t * 37.3 + p.x * 3.0);
 
-  emit = c * (0.30 + 2.6 * pow(t01, 1.55)) * uIntensity * flick;
+  emit = c * (0.15 + 1.15 * pow(t01, 2.2)) * uIntensity * flick;
   return dens;
 }
 
@@ -171,14 +171,14 @@ vec3 groundColor(vec3 gp, vec3 rd) {
   float flick = 1.0 + 0.12 * sin(t * 9.1) + 0.05 * sin(t * 23.0);
   vec3 lightCol = mix(uColorEdge, uColorCore, 0.35);
 
-  float atten = 1.0 / (1.0 + pow(dAxis / (1.35 * uSize), 2.0) * 2.6);
+  float atten = 1.0 / (1.0 + pow(dAxis / (1.1 * uSize), 2.0) * 3.2);
   float grain = hash13(vec3(floor(gp.xz * 70.0), 3.0)) * 0.016;
   vec3 base = vec3(0.028, 0.026, 0.031) + grain;
 
-  vec3 c = base + lightCol * atten * 0.30 * uIntensity * flick;
+  vec3 c = base + lightCol * atten * 0.22 * uIntensity * flick;
 
   // Fake reflected glow pool right under the flame
-  float pool = exp(-dAxis * 2.2 / uSize) * 0.10 * uIntensity * flick;
+  float pool = exp(-dAxis * 3.0 / uSize) * 0.05 * uIntensity * flick;
   c += lightCol * pool;
 
   float dist = length(gp - uCamPos);
@@ -227,7 +227,7 @@ void main() {
         vec3 emit; float df = fireField(p, emit);
         vec3 scat; float ds = smokeField(p, scat);
 
-        float sigF = df * 1.55;
+        float sigF = df * 2.2;
         float sigS = ds * 1.25;
         float sig = sigF + sigS;
         if (sig > 1e-4) {
@@ -251,7 +251,7 @@ void main() {
   float tc2 = max(dot(c2 - ro, rd), 0.0);
   float d1 = length(ro + rd * tc1 - c1) / uSize;
   float d2 = length(ro + rd * tc2 - c2) / uSize;
-  float g = exp(-d1 * 2.0) * 0.55 + exp(-d2 * 3.0) * 0.35;
+  float g = exp(-d1 * 3.2) * 0.40 + exp(-d2 * 4.6) * 0.25;
   vec3 glowCol = mix(uColorEdge, uColorCore, 0.3);
   col += glowCol * g * uGlow * uIntensity * flick * (0.25 + 0.75 * trans);
 
