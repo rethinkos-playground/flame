@@ -107,6 +107,7 @@ float fireField(vec3 p, out vec3 emit) {
 
   float yc = clamp(y, 0.0, 1.0);
   float Ry = R * (1.0 - pow(yc, 1.35)); // teardrop envelope
+  Ry *= 1.0 + 0.28 * exp(-y * 9.0);     // flare skirt at the fuel pool
   Ry = max(Ry, 0.02 * R);
 
   float radial = 1.0 - smoothstep(0.0, 1.0, r / Ry);
@@ -126,10 +127,10 @@ float fireField(vec3 p, out vec3 emit) {
   vec3 np = vec3(sxz / uSize * 3.2, (p.y - uBaseY) / uSize * 2.0 - rise);
 
   // Domain warping (iq): fold the domain with ridged noise -> licking tongues
-  float warpAmt = 1.7 * mix(0.35, 1.0, y) * uTurbulence;
+  float warpAmt = 1.35 * mix(0.35, 1.0, y) * uTurbulence;
   vec2 q = vec2(
-      ridged(np * 0.85 + vec3(0.0, 0.0, t * 0.45)),
-      ridged(np * 0.85 + vec3(3.7, 1.4, t * 0.45)));
+      ridged(np * 1.15 + vec3(0.0, 0.0, t * 0.45)),
+      ridged(np * 1.15 + vec3(3.7, 1.4, t * 0.45)));
   vec3 wp = np + vec3(q.x - 0.5, q.y - 0.5, (q.x - q.y) * 0.35) * warpAmt;
 
   float n = fbm(wp);
