@@ -65,7 +65,7 @@ float fbm(vec3 p) {
 
 // ---------- Flame geometry ----------
 float flameH() { return 1.62 * uSize; }
-float flameR() { return 0.52 * uSize; }
+float flameR() { return 0.58 * uSize; }
 
 // Dancing sway of the flame axis, stronger near the tip
 vec2 axisSway(float y, float t) {
@@ -90,7 +90,7 @@ float fireField(vec3 p, out vec3 emit) {
   float r = length(p.xz - sway);
 
   float yc = clamp(y, 0.0, 1.0);
-  float Ry = R * (1.0 - pow(yc, 1.55)); // teardrop envelope
+  float Ry = R * (1.0 - pow(yc, 1.35)); // teardrop envelope
   Ry = max(Ry, 0.02 * R);
 
   float radial = 1.0 - smoothstep(0.0, 1.0, r / Ry);
@@ -99,11 +99,11 @@ float fireField(vec3 p, out vec3 emit) {
 
   float fuel = pow(radial, 1.35) * lift * tip;
 
-  // Rising turbulent detail
-  vec3 np = vec3(p.xz / uSize * 3.0, (p.y - uBaseY) / uSize * 3.4 - t * uRise);
+  // Rising turbulent detail (stretched vertically into licks)
+  vec3 np = vec3(p.xz / uSize * 3.4, (p.y - uBaseY) / uSize * 2.2 - t * uRise);
   float n = fbm(np + vec3(0.0, 0.0, t * 0.35));
-  float turb = mix(0.35, 1.65, n);
-  float erosion = smoothstep(0.0, 0.7, y) * uTurbulence;
+  float turb = mix(0.30, 1.80, n);
+  float erosion = smoothstep(-0.05, 0.55, y) * uTurbulence;
 
   float heat = fuel * mix(1.0, turb, erosion);
   heat -= 0.30 * smoothstep(0.35, 1.05, y); // cool toward the tip

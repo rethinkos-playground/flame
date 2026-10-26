@@ -28,8 +28,8 @@ const DEFAULTS = {
   colorEdge: '#ff4d00',
   size: 1.0,
   intensity: 1.2,
-  turbulence: 0.62,
-  wobble: 0.07,
+  turbulence: 0.8,
+  wobble: 0.12,
   speed: 1.0,
   rise: 2.4,
   smoke: 0.55,
@@ -176,7 +176,7 @@ const emberUniforms = {
   uTime: { value: 0 },
   uSpeed: { value: params.speed },
   uHeight: { value: 1.62 * params.size },
-  uRadius: { value: 0.52 * params.size },
+  uRadius: { value: 0.58 * params.size },
   uPixelRatio: { value: dpr },
   uColorCore: { value: colorCore },
   uColorEdge: { value: colorEdge },
@@ -232,7 +232,7 @@ function syncParams() {
 
   emberUniforms.uSpeed.value = params.speed;
   emberUniforms.uHeight.value = 1.62 * params.size;
-  emberUniforms.uRadius.value = 0.52 * params.size;
+  emberUniforms.uRadius.value = 0.58 * params.size;
   embers.visible = params.embers;
 
   bloomPass.strength = params.bloom;

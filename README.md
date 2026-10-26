@@ -13,7 +13,7 @@
 - 🌪 **动态参数** — 燃烧速度、上升速度、湍流侵蚀、轴心摇曳
 - ✨ **氛围效果** — 体积烟雾（受火焰照亮）、GPU 余烬火星、地面光池反射、Bloom 泛光、ACES 色调映射
 - 🖱 **交互** — 拖拽旋转 / 滚轮缩放 / 自动环绕
-- ⚡ **性能** — 射线步进早退、抖动去色带、自适应分辨率降采样
+- ⚡ **性能** — 体积光线步进在半分辨率 HDR target 中渲染后全分辨率合成（像素量 ÷4）、FBM 3 octaves、步进早退 + 抖动去色带、画质三档（96/72/48 步）+ FPS 自适应降档 + 自适应 DPR
 
 ## 🛠 技术栈
 
@@ -38,11 +38,12 @@ npm run preview  # 预览构建产物
 
 ```
 src/
-├── main.ts                  # 场景、后处理、GUI、渲染循环
+├── main.ts                  # 场景、两阶段渲染管线、GUI、渲染循环
 ├── style.css                # 页面与控制台主题
 └── shaders/
     ├── flame.vert.glsl      # 全屏四边形
-    ├── flame.frag.glsl      # 体积火焰光线步进（核心）
+    ├── flame.frag.glsl      # 体积火焰光线步进（半分辨率，核心）
+    ├── composite.frag.glsl  # 全分辨率合成（背景/地面/光晕/暗角）
     ├── ember.vert.glsl      # 余烬粒子（GPU 驱动）
     └── ember.frag.glsl
 .github/workflows/deploy.yml # Pages 自动部署
