@@ -126,12 +126,13 @@ float fireField(vec3 p, out vec3 emit) {
 
   vec3 np = vec3(sxz / uSize * 3.2, (p.y - uBaseY) / uSize * 2.0 - rise);
 
-  // Domain warping (iq): fold the domain with ridged noise -> licking tongues
-  float warpAmt = 1.35 * mix(0.35, 1.0, y) * uTurbulence;
+  // Domain warping (iq): fold the domain with ridged noise -> licking tongues.
+  // Displace all three axes so folds never align into horizontal bands.
+  float warpAmt = 1.6 * mix(0.35, 1.0, y) * uTurbulence;
   vec2 q = vec2(
-      ridged(np * 1.15 + vec3(0.0, 0.0, t * 0.45)),
-      ridged(np * 1.15 + vec3(3.7, 1.4, t * 0.45)));
-  vec3 wp = np + vec3(q.x - 0.5, q.y - 0.5, (q.x - q.y) * 0.35) * warpAmt;
+      ridged(np * 0.9 + vec3(0.0, 0.0, t * 0.45)),
+      ridged(np * 0.9 + vec3(3.7, 1.4, t * 0.45)));
+  vec3 wp = np + vec3(q.x - 0.5, (q.y - q.x) * 0.7, q.y - 0.5) * warpAmt;
 
   float n = fbm(wp);
   float turb = mix(0.25, 1.85, n);
