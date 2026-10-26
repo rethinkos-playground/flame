@@ -63,6 +63,13 @@ float fbm(vec3 p) {
   return v;
 }
 
+// Cheaper 2-octave variant for low-frequency smoke
+float fbm2(vec3 p) {
+  float v = 0.5 * vnoise(p);
+  p = p * 2.07 + vec3(1.3, 7.1, 3.7);
+  return v + 0.25 * vnoise(p);
+}
+
 // Ridged noise: sharp creases -> thin filament-like licks
 float ridged(vec3 p) {
   float n = 1.0 - abs(2.0 * vnoise(p) - 1.0);
@@ -115,6 +122,11 @@ float fireField(vec3 p, out vec3 emit) {
   float tip    = 1.0 - smoothstep(0.55, 1.10, y);
 
   float fuel = pow(radial, 1.2) * lift * tip;
+
+  // Empty-space skip: dens>0 requires heat>0 => fuel*mix(1,turb,erosion) > 0.26
+  // and mix() <= 1.85, so fuel <= 0.14 can never contribute. Avoids all noise
+  // evaluation for the majority of steps outside the flame cone.
+  if (fuel < 0.14) return 0.0;
 
   // Buoyant advection: gas accelerates as it rises -> tips stretch & race
   float rise = t * uRise * (0.55 + y * 1.15);
@@ -177,12 +189,16 @@ float smokeField(vec3 p, out vec3 scat) {
   vec3 np = vec3(p.xz / uSize * 1.15, (p.y - uBaseY) / uSize * 1.15 - t * uRise * 0.40);
   np.x += sin(t * 0.23) * 0.6; // slow wind drift
   np.z += cos(t * 0.19) * 0.5;
-  float n = fbm(np + 47.3);
 
   float rad = length(p.xz - sway * 0.4);
   float spread = (0.38 + (y - 0.45) * 0.55) * uSize;
   float radial = 1.0 - smoothstep(spread * 0.45, spread * 1.6, rad);
   float band = smoothstep(0.45, 0.95, y) * (1.0 - smoothstep(1.5, 2.35, y));
+
+  // Empty-space skip before any noise evaluation
+  if (radial * band * uSmoke < 0.01) return 0.0;
+
+  float n = fbm2(np + 47.3);
 
   float d = smoothstep(0.52, 0.95, n) * radial * band * uSmoke;
 

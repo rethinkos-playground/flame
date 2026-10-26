@@ -16,9 +16,9 @@ import emberFrag from './shaders/ember.frag.glsl?raw';
 // Parameters
 // ---------------------------------------------------------------------------
 const QUALITY = {
-  高: { scale: 0.6, steps: 96 },
-  中: { scale: 0.5, steps: 72 },
-  低: { scale: 0.35, steps: 48 },
+  高: { scale: 0.6, steps: 84 },
+  中: { scale: 0.5, steps: 64 },
+  低: { scale: 0.35, steps: 44 },
 } as const;
 type QualityName = keyof typeof QUALITY;
 const QUALITY_ORDER: QualityName[] = ['高', '中', '低'];
@@ -72,6 +72,21 @@ renderer.setPixelRatio(dpr);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.95;
+
+// Software rasterizers (SwiftShader/llvmpipe) cannot afford heavy raymarching:
+// start them at the lowest tier and full-resolution-off right away.
+{
+  const gl = renderer.getContext();
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  const gpu = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
+  if (/swiftshader|llvmpipe|softpipe|software|basic render/i.test(gpu)) {
+    dpr = 1;
+    renderer.setPixelRatio(dpr);
+    if (!new URLSearchParams(window.location.search).has('q')) {
+      params.quality = '低';
+    }
+  }
+}
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
@@ -406,7 +421,7 @@ function tick() {
       fpsEl.textContent = `FPS ${fps.toFixed(0)} · 体积 ${volumeRT.width}×${volumeRT.height} · DPR ${dpr.toFixed(2)} · 档位 ${params.quality}`;
     }
     if (params.autoQuality) {
-      if (fps < 40) {
+      if (fps < 45) {
         slowWindows++;
         if (slowWindows >= 2) {
           downgradeQuality();
