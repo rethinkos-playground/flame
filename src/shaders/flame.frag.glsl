@@ -63,6 +63,12 @@ float fbm(vec3 p) {
   return v;
 }
 
+// Ridged noise: sharp creases -> thin filament-like licks
+float ridged(vec3 p) {
+  float n = 1.0 - abs(2.0 * vnoise(p) - 1.0);
+  return n * n;
+}
+
 // ---------- Flame geometry ----------
 float flameH() { return 1.62 * uSize; }
 float flameR() { return 0.58 * uSize; }
@@ -77,6 +83,15 @@ vec2 axisSway(float y, float t) {
 }
 
 // ---------- Fire field ----------
+// Blackbody-inspired 4-stop ramp: smoldering deep -> edge -> core -> white hot
+vec3 flameRamp(float t01) {
+  vec3 c = uColorEdge * 0.16;
+  c = mix(c, uColorEdge, smoothstep(0.04, 0.34, t01));
+  c = mix(c, uColorCore, smoothstep(0.34, 0.74, t01));
+  c = mix(c, vec3(1.0), smoothstep(0.82, 1.0, t01) * 0.75);
+  return c;
+}
+
 float fireField(vec3 p, out vec3 emit) {
   emit = vec3(0.0);
   float H = flameH();
@@ -84,10 +99,11 @@ float fireField(vec3 p, out vec3 emit) {
   float t = uTime * uSpeed;
 
   float y = (p.y - uBaseY) / H; // 0 at base, 1 at nominal tip
-  if (y < 0.0 || y > 1.25) return 0.0;
+  if (y < 0.0 || y > 1.3) return 0.0;
 
   vec2 sway = axisSway(y, t);
-  float r = length(p.xz - sway);
+  vec2 xz = p.xz - sway;
+  float r = length(xz);
 
   float yc = clamp(y, 0.0, 1.0);
   float Ry = R * (1.0 - pow(yc, 1.35)); // teardrop envelope
@@ -95,34 +111,54 @@ float fireField(vec3 p, out vec3 emit) {
 
   float radial = 1.0 - smoothstep(0.0, 1.0, r / Ry);
   float lift   = smoothstep(-0.03, 0.10, y);   // ignition at the base
-  float tip    = 1.0 - smoothstep(0.55, 1.08, y);
+  float tip    = 1.0 - smoothstep(0.55, 1.10, y);
 
-  float fuel = pow(radial, 1.35) * lift * tip;
+  float fuel = pow(radial, 1.2) * lift * tip;
 
-  // Rising turbulent detail (stretched vertically into licks)
-  vec3 np = vec3(p.xz / uSize * 3.4, (p.y - uBaseY) / uSize * 2.2 - t * uRise);
-  float n = fbm(np + vec3(0.0, 0.0, t * 0.35));
-  float turb = mix(0.30, 1.80, n);
-  float erosion = smoothstep(-0.05, 0.55, y) * uTurbulence;
+  // Buoyant advection: gas accelerates as it rises -> tips stretch & race
+  float rise = t * uRise * (0.55 + y * 1.15);
+
+  // Helical swirl: rotate sampling coords around the axis with height
+  float ang = y * 2.6 + t * 0.7;
+  float ca = cos(ang), sa = sin(ang);
+  vec2 sxz = vec2(xz.x * ca - xz.y * sa, xz.x * sa + xz.y * ca);
+
+  vec3 np = vec3(sxz / uSize * 3.2, (p.y - uBaseY) / uSize * 2.0 - rise);
+
+  // Domain warping (iq): fold the domain with ridged noise -> licking tongues
+  float warpAmt = 1.7 * mix(0.35, 1.0, y) * uTurbulence;
+  vec2 q = vec2(
+      ridged(np * 0.85 + vec3(0.0, 0.0, t * 0.45)),
+      ridged(np * 0.85 + vec3(3.7, 1.4, t * 0.45)));
+  vec3 wp = np + vec3(q.x - 0.5, q.y - 0.5, (q.x - q.y) * 0.35) * warpAmt;
+
+  float n = fbm(wp);
+  float turb = mix(0.25, 1.85, n);
+  float erosion = smoothstep(-0.05, 0.5, y) * uTurbulence;
 
   float heat = fuel * mix(1.0, turb, erosion);
+
+  // Fine silhouette breakup: erode the outer shell with high-freq noise
+  heat -= (1.0 - radial) * vnoise(wp * 3.1 + vec3(0.0, -t * 2.2, 0.0)) * 0.28 * uTurbulence;
   heat -= 0.30 * smoothstep(0.35, 1.05, y); // cool toward the tip
+
+  // Global fuel pulsation: fires breathe
+  heat *= 0.94 + 0.06 * sin(t * 6.3) + 0.03 * sin(t * 15.1);
+
   heat = (heat - 0.26) * 1.8;
   heat = max(heat, 0.0);
 
   float dens = smoothstep(0.0, 0.45, heat);
   float t01 = clamp(heat * 0.75, 0.0, 1.0);
 
-  // Temperature -> color: edge color -> core color -> white hot
-  vec3 c = mix(uColorEdge, uColorCore, smoothstep(0.10, 0.85, t01));
-  c = mix(c, vec3(1.0), smoothstep(0.88, 1.0, t01) * 0.6);
+  vec3 c = flameRamp(t01);
 
   float flick = 1.0
       + 0.10 * sin(t * 9.1)
       + 0.05 * sin(t * 21.7 + p.y * 4.0)
       + 0.04 * sin(t * 37.3 + p.x * 3.0);
 
-  emit = c * (0.25 + 2.0 * pow(t01, 1.8)) * uIntensity * flick;
+  emit = c * (0.20 + 2.4 * pow(t01, 2.0)) * uIntensity * flick;
   return dens;
 }
 

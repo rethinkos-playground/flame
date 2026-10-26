@@ -41,6 +41,14 @@ const DEFAULTS = {
 };
 const params = { ...DEFAULTS };
 
+// URL overrides (for demos / testing): ?q=高|中|低 & auto=0
+{
+  const qs = new URLSearchParams(window.location.search);
+  const q = qs.get('q');
+  if (q && q in QUALITY) params.quality = q as QualityName;
+  if (qs.get('auto') === '0') params.autoQuality = false;
+}
+
 const PRESETS: Array<{ name: string; core: string; edge: string }> = [
   { name: '经典烈焰', core: '#ffe6b8', edge: '#ff4d00' },
   { name: '幽蓝冰焰', core: '#eaf7ff', edge: '#1e6dff' },
