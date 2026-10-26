@@ -15,7 +15,7 @@ void main() {
   vLife = life;
   vSeed = aSeed;
 
-  float ang = aSeed * 57.0 + life * (1.2 + aSeed * 3.4) + uTime * 0.1;
+  float ang = aSeed * 57.0 + life * (1.2 + fract(aSeed * 31.0) * 4.0) + uTime * 0.1;
   float rad = uRadius * (0.22 + 1.75 * life) * (0.35 + 0.9 * fract(aSeed * 13.7));
   vec3 pos = vec3(
       cos(ang) * rad,
@@ -26,5 +26,5 @@ void main() {
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = aSize * uPixelRatio * (16.0 / max(-mv.z, 0.1)) * (1.0 - 0.55 * life);
+  gl_PointSize = aSize * uPixelRatio * (10.0 / max(-mv.z, 0.1)) * (1.0 - 0.55 * life);
 }

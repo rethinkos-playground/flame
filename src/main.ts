@@ -8,17 +8,26 @@ import GUI from 'lil-gui';
 
 import flameVert from './shaders/flame.vert.glsl?raw';
 import flameFrag from './shaders/flame.frag.glsl?raw';
+import compositeFrag from './shaders/composite.frag.glsl?raw';
 import emberVert from './shaders/ember.vert.glsl?raw';
 import emberFrag from './shaders/ember.frag.glsl?raw';
 
 // ---------------------------------------------------------------------------
 // Parameters
 // ---------------------------------------------------------------------------
+const QUALITY = {
+  高: { scale: 0.6, steps: 96 },
+  中: { scale: 0.5, steps: 72 },
+  低: { scale: 0.35, steps: 48 },
+} as const;
+type QualityName = keyof typeof QUALITY;
+const QUALITY_ORDER: QualityName[] = ['高', '中', '低'];
+
 const DEFAULTS = {
   colorCore: '#ffe6b8',
   colorEdge: '#ff4d00',
   size: 1.0,
-  intensity: 1.1,
+  intensity: 1.2,
   turbulence: 0.62,
   wobble: 0.07,
   speed: 1.0,
@@ -27,6 +36,8 @@ const DEFAULTS = {
   embers: true,
   bloom: 0.6,
   autoRotate: true,
+  quality: '中' as QualityName,
+  autoQuality: true,
 };
 const params = { ...DEFAULTS };
 
@@ -48,7 +59,7 @@ const renderer = new THREE.WebGLRenderer({
   antialias: false,
   powerPreference: 'high-performance',
 });
-let dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+let dpr = Math.min(window.devicePixelRatio || 1, 1.5);
 renderer.setPixelRatio(dpr);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -61,10 +72,10 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   60
 );
-camera.position.set(0.3, 1.25, 4.2);
+camera.position.set(0.28, 1.15, 3.5);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0.85, 0);
+controls.target.set(0, 0.8, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.enablePan = false;
@@ -75,13 +86,13 @@ controls.autoRotate = params.autoRotate;
 controls.autoRotateSpeed = 0.55;
 
 // ---------------------------------------------------------------------------
-// Flame — fullscreen raymarched volume
+// Shared uniforms
 // ---------------------------------------------------------------------------
 const colorCore = new THREE.Color(params.colorCore);
 const colorEdge = new THREE.Color(params.colorEdge);
 const smokeColor = new THREE.Color();
 
-const uniforms = {
+const sharedUniforms = {
   uCamPos: { value: new THREE.Vector3() },
   uCamMat: { value: new THREE.Matrix4() },
   uFrustum: { value: new THREE.Vector2() },
@@ -97,28 +108,56 @@ const uniforms = {
   uTurbulence: { value: params.turbulence },
   uWobble: { value: params.wobble },
   uSmoke: { value: params.smoke },
-  uGlow: { value: 0.28 },
+  uGlow: { value: 0.35 },
   uBaseY: { value: 0 },
+  uSteps: { value: QUALITY[params.quality].steps },
 };
 
-const flameQuad = new THREE.Mesh(
+// ---------------------------------------------------------------------------
+// Pass 1 — volume raymarch into a half-resolution HDR target
+// ---------------------------------------------------------------------------
+const volumeRT = new THREE.WebGLRenderTarget(2, 2, {
+  type: THREE.HalfFloatType,
+  depthBuffer: false,
+  stencilBuffer: false,
+  minFilter: THREE.LinearFilter,
+  magFilter: THREE.LinearFilter,
+});
+
+const volumeScene = new THREE.Scene();
+const volumeCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const volumeQuad = new THREE.Mesh(
   new THREE.PlaneGeometry(2, 2),
   new THREE.ShaderMaterial({
     vertexShader: flameVert,
     fragmentShader: flameFrag,
-    uniforms,
+    uniforms: sharedUniforms,
     depthTest: false,
     depthWrite: false,
   })
 );
-flameQuad.frustumCulled = false;
-flameQuad.renderOrder = -10;
-scene.add(flameQuad);
+volumeQuad.frustumCulled = false;
+volumeScene.add(volumeQuad);
 
 // ---------------------------------------------------------------------------
-// Embers — GPU-driven rising sparks
+// Pass 2 — full-res composite (background + volume + glow) + embers
 // ---------------------------------------------------------------------------
-const EMBER_COUNT = 300;
+const compositeQuad = new THREE.Mesh(
+  new THREE.PlaneGeometry(2, 2),
+  new THREE.ShaderMaterial({
+    vertexShader: flameVert,
+    fragmentShader: compositeFrag,
+    uniforms: { ...sharedUniforms, uVolume: { value: volumeRT.texture } },
+    depthTest: false,
+    depthWrite: false,
+  })
+);
+compositeQuad.frustumCulled = false;
+compositeQuad.renderOrder = -10;
+scene.add(compositeQuad);
+
+// Embers — GPU-driven rising sparks
+const EMBER_COUNT = 220;
 const emberGeometry = new THREE.BufferGeometry();
 {
   const pos = new Float32Array(EMBER_COUNT * 3);
@@ -182,13 +221,14 @@ function syncParams() {
   colorEdge.setStyle(params.colorEdge);
   smokeColor.copy(colorEdge).multiplyScalar(0.2).addScalar(0.012);
 
-  uniforms.uSize.value = params.size;
-  uniforms.uIntensity.value = params.intensity;
-  uniforms.uSpeed.value = params.speed;
-  uniforms.uRise.value = params.rise;
-  uniforms.uTurbulence.value = params.turbulence;
-  uniforms.uWobble.value = params.wobble;
-  uniforms.uSmoke.value = params.smoke;
+  sharedUniforms.uSize.value = params.size;
+  sharedUniforms.uIntensity.value = params.intensity;
+  sharedUniforms.uSpeed.value = params.speed;
+  sharedUniforms.uRise.value = params.rise;
+  sharedUniforms.uTurbulence.value = params.turbulence;
+  sharedUniforms.uWobble.value = params.wobble;
+  sharedUniforms.uSmoke.value = params.smoke;
+  sharedUniforms.uSteps.value = QUALITY[params.quality].steps;
 
   emberUniforms.uSpeed.value = params.speed;
   emberUniforms.uHeight.value = 1.62 * params.size;
@@ -197,8 +237,8 @@ function syncParams() {
 
   bloomPass.strength = params.bloom;
   controls.autoRotate = params.autoRotate;
+  resizeVolumeRT();
 }
-syncParams();
 
 // ---------------------------------------------------------------------------
 // GUI
@@ -245,6 +285,13 @@ fFx.add(params, 'embers').name('余烬火星').onChange(syncParams);
 fFx.add(params, 'bloom', 0, 2, 0.01).name('泛光').onChange(syncParams);
 fFx.add(params, 'autoRotate').name('自动旋转').onChange(syncParams);
 
+const fPerf = gui.addFolder('⚡ 性能');
+fPerf
+  .add(params, 'quality', QUALITY_ORDER as unknown as string[])
+  .name('画质档位')
+  .onChange(syncParams);
+fPerf.add(params, 'autoQuality').name('自动降档');
+
 gui
   .add(
     {
@@ -261,8 +308,15 @@ gui
 if (window.innerWidth < 720) gui.close();
 
 // ---------------------------------------------------------------------------
-// Resize (+ adaptive resolution)
+// Resize (+ volume target sizing)
 // ---------------------------------------------------------------------------
+function resizeVolumeRT() {
+  const scale = QUALITY[params.quality].scale;
+  const w = Math.max(2, Math.round(renderer.domElement.width * scale));
+  const h = Math.max(2, Math.round(renderer.domElement.height * scale));
+  volumeRT.setSize(w, h);
+}
+
 function onResize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -272,26 +326,44 @@ function onResize() {
   renderer.setSize(w, h);
   composer.setSize(w, h);
   emberUniforms.uPixelRatio.value = dpr;
+  resizeVolumeRT();
 }
 window.addEventListener('resize', onResize);
 onResize();
+syncParams();
 
 // ---------------------------------------------------------------------------
 // Render loop
 // ---------------------------------------------------------------------------
 const tanHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+const fpsEl = document.getElementById('fps');
 
 function updateCameraUniforms() {
   camera.updateMatrixWorld();
-  uniforms.uCamPos.value.copy(camera.position);
-  uniforms.uCamMat.value.copy(camera.matrixWorld);
-  uniforms.uFrustum.value.set(tanHalf * camera.aspect, tanHalf);
+  sharedUniforms.uCamPos.value.copy(camera.position);
+  sharedUniforms.uCamMat.value.copy(camera.matrixWorld);
+  sharedUniforms.uFrustum.value.set(tanHalf * camera.aspect, tanHalf);
+}
+
+function downgradeQuality() {
+  const idx = QUALITY_ORDER.indexOf(params.quality);
+  if (idx < QUALITY_ORDER.length - 1) {
+    params.quality = QUALITY_ORDER[idx + 1];
+    syncParams();
+    gui.controllersRecursive().forEach((c) => c.updateDisplay());
+    return;
+  }
+  if (dpr > 1) {
+    dpr = Math.max(1, dpr - 0.25);
+    onResize();
+  }
 }
 
 const clock = new THREE.Clock();
 let time = 0;
 let frames = 0;
 let fpsAcc = 0;
+let slowWindows = 0;
 let firstFrame = true;
 
 function tick() {
@@ -300,10 +372,16 @@ function tick() {
   time += dt;
 
   controls.update();
-  uniforms.uTime.value = time;
-  uniforms.uRand.value = Math.random();
+  sharedUniforms.uTime.value = time;
+  sharedUniforms.uRand.value = Math.random();
   emberUniforms.uTime.value = time;
   updateCameraUniforms();
+
+  // Pass 1: volume at reduced resolution
+  renderer.setRenderTarget(volumeRT);
+  renderer.render(volumeScene, volumeCamera);
+  // Pass 2: full-res composite + embers + bloom
+  renderer.setRenderTarget(null);
   composer.render();
 
   if (firstFrame) {
@@ -311,14 +389,24 @@ function tick() {
     document.getElementById('loader')?.classList.add('done');
   }
 
-  // Adaptive resolution: step down pixel ratio when FPS stays low
+  // FPS meter + adaptive quality
   frames++;
   fpsAcc += dt;
-  if (fpsAcc >= 2) {
+  if (fpsAcc >= 1) {
     const fps = frames / fpsAcc;
-    if (fps < 42 && dpr > 1) {
-      dpr = Math.max(1, dpr - 0.25);
-      onResize();
+    if (fpsEl) {
+      fpsEl.textContent = `FPS ${fps.toFixed(0)} · 体积 ${volumeRT.width}×${volumeRT.height} · DPR ${dpr.toFixed(2)} · 档位 ${params.quality}`;
+    }
+    if (params.autoQuality) {
+      if (fps < 40) {
+        slowWindows++;
+        if (slowWindows >= 2) {
+          downgradeQuality();
+          slowWindows = 0;
+        }
+      } else {
+        slowWindows = 0;
+      }
     }
     frames = 0;
     fpsAcc = 0;
